@@ -13,7 +13,7 @@ private:
     int buffer_size;
     int line_count;
 
-    bool file_exists(const char *filename){
+    static bool file_exists(const char *filename){
         FILE* file_pointer = fopen(filename, "r");
         bool is_exists = false;
         if (file_pointer != nullptr){
@@ -23,8 +23,8 @@ private:
         return is_exists;
     }
 public:
-    Text (int rows = 10, int buffer = 256)
-    : row_number(rows), buffer_size(buffer), line_count(0)
+    explicit Text (int rows = 10, int buffer = 256)
+    : text(nullptr), row_number(rows), buffer_size(buffer), line_count(0)
     {
         text = (char**)malloc(row_number * sizeof(char*));
         if (text == nullptr){
@@ -44,11 +44,12 @@ public:
     ~Text() {
         for (int i = 0; i < row_number; i++) {
             free(text[i]);
+            text[i] = nullptr;
         }
         free(text);
     }
 
-    static void print_help() {
+    void print_help() {
         cout << "This program is the 'Simple Text Editor'\n"
                 << "It implements the following commands:\n"
                 << "0 - See the commands\n"
@@ -58,18 +59,19 @@ public:
                 << "4 - Loading the information\n"
                 << "5 - Print the current text to console\n"
                 << "6 - Insert the text by line and symbol index\n"
-                << "7 - Search for the text\n";
+                << "7 - Search for the text\n"
+                << "8 - Delete the text by line and index\n";
     }
 
     void append_text_to_end(){
         char* buffer = nullptr; // цей вказівник ще не використовується
-        size_t buffer_size = 0;
+        size_t local_buffer_size = 0;
         ssize_t input_length; // довжина рядка що зчитали
 
         cout << "Enter a text to append: " << endl;
         cin.ignore();
         // динамічно виділяємо памʼять та зберігаємо текст в буфері
-        input_length = getline(&buffer, &buffer_size, stdin);
+        input_length = getline(&buffer, &local_buffer_size, stdin);
 
         if (input_length == -1){
             cerr << "Error while reading input.\n" << endl;
@@ -81,14 +83,14 @@ public:
 
         // якщо немає ніякого текст, то починаємо зпочатку
         if (line_count == 0){
-            strncpy(text[line_count], buffer, buffer_size); // копіюємо введений текст у перший рядок
+            strncpy(text[line_count], buffer, local_buffer_size); // копіюємо введений текст у перший рядок
             line_count ++;
         } else{
-            size_t current_length = strlen(text[line_count - 1]); // довжина останнього рядка (без вставленого тексту)
-            size_t new_length = current_length + strlen(buffer) + 1; // довжина того шо було + новий текст + \0
+            size_t current_length = strnlen(text[line_count - 1], buffer_size); // довжина останнього рядка (без вставленого тексту)
+            size_t new_length = current_length + strnlen(buffer, local_buffer_size) + 1; // довжина того шо було + новий текст + \0
 
             // якщо нова довжина більша за виділену кількість в буфері
-            if (new_length > buffer_size) {
+            if (new_length > local_buffer_size) {
                 // перевиділяємо памʼять для вказівника
                 text[line_count - 1] = (char*) realloc(text[line_count - 1], new_length * sizeof(char));
                 if (text[line_count - 1] == nullptr) {
@@ -97,7 +99,7 @@ public:
                     return;
                 }
             }
-            strcat(text[line_count - 1], buffer); // додаємо введений текст до кінця останнього рядка
+            strncat(text[line_count - 1], buffer, local_buffer_size); // додаємо введений текст до кінця останнього рядка
         }
         free(buffer);
     }
@@ -180,27 +182,33 @@ public:
     }
 
     void print_text() const {
+        if (text == nullptr) {
+            cout << "Text is empty" << endl;
+            return;
+        }
         for (int i = 0; i < line_count; ++i) {
-            cout << text[i] << endl;
+            if (text[i] != nullptr){
+                cout << text[i] << endl;
+            }
         }
     }
 
     void insert_text_by_line() {
         int line, index;
         char* buffer = nullptr;
-        size_t buf_size = 0;
+        size_t local_buffer_size = 0;
         ssize_t input_length;
 
         cout << "Choose line and index: ";
         cin >> line >> index;
-        if (line >= line_count || index > strlen(text[line])) {
+        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
             cout << "You entered invalid line or index." << endl;
             return;
         }
 
         cout << "Enter text to insert: ";
         cin.ignore();
-        input_length = getline(&buffer, &buf_size, stdin);
+        input_length = getline(&buffer, &local_buffer_size, stdin);
         if (input_length == -1) {
             cerr << "Error reading input" << endl;
             free(buffer);
@@ -209,9 +217,9 @@ public:
 
         buffer[input_length - 1] = '\0';
 
-        size_t current_length = strlen(text[line]);
-        size_t buffer_length = strlen(buffer);
-        size_t new_length = current_length + buffer_length + 1;
+        size_t current_length = strnlen(text[line], buffer_size);
+        size_t local_buffer_length = strnlen(buffer, local_buffer_size);
+        size_t new_length = current_length + local_buffer_length + 1;
 
         if (new_length > buffer_size) {
             text[line] = (char*)realloc(text[line], new_length * sizeof(char));
@@ -228,10 +236,11 @@ public:
             return;
         }
 
-        strcpy(temporary_buffer, text[line] + index);
+        strncpy(temporary_buffer, text[line] + index, current_length - index);
+        temporary_buffer[current_length - index] = '\0';
         text[line][index] = '\0';
-        strcat(text[line], buffer);
-        strcat(text[line], temporary_buffer);
+        strncat(text[line], buffer, local_buffer_length);
+        strncat(text[line], temporary_buffer, current_length - index);
 
         free(temporary_buffer);
         free(buffer);
@@ -251,13 +260,49 @@ public:
             char* position = text[i];
             while ((position = strstr(position, buffer)) != nullptr) {
                 cout << "Text is present in this position: " << i << " " << position - text[i] << endl;
-                position += strlen(buffer);
+                position += strnlen(buffer, buffer_size);
                 is_found = true;
             }
         }
         if (!is_found) {
             cout << "There is no match for the given text." << endl;
         }
+    }
+
+
+    void delete_text(){
+        // input
+        int line, index, num_of_symbols;
+        cout << "Choose line, index and number of symbols: ";
+        cin >> line >> index >> num_of_symbols;
+
+        // validation for the input
+        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
+            cout << "You entered invalid line or index." << endl;
+            return;
+        }
+        else if (index + num_of_symbols > strnlen(text[line], buffer_size)) {
+            cout << "The number of symbols you want to deleted is bigger than number of symbols in buffer" << endl;
+            return;
+        }
+
+        size_t current_length = strnlen(text[line], buffer_size); // довжина тексту в буфері зараз
+
+        char* temporary_buffer = (char*)malloc((current_length) * sizeof(char));
+        if (temporary_buffer == nullptr){
+            cerr << "Memory allocation failed" << endl;
+            return;
+        }
+        strncpy(temporary_buffer, text[line], index); // текст який був до індексу, після якого видаляти
+        temporary_buffer[index] = '\0'; // нульове закінчення
+        strncat(temporary_buffer, text[line] + index + num_of_symbols, strnlen(text[line], buffer_size) - index - num_of_symbols);
+        // додаємо текст який залишився після видаленого
+
+        strncpy(text[line], temporary_buffer, buffer_size - 1);
+        text[line][buffer_size - 1] = '\0';
+
+        free(temporary_buffer);
+        cout << "Text has been deleted successfully." << endl;
     }
 };
 
@@ -270,6 +315,7 @@ enum Commands {
     COMMAND_PRINT = 5,
     COMMAND_INSERT_LI = 6,
     COMMAND_SEARCH = 7,
+    COMMAND_DELETE = 8
 };
 
 int main() {
@@ -310,6 +356,9 @@ int main() {
                 break;
             case COMMAND_SEARCH:
                 text.search_text();
+                break;
+            case COMMAND_DELETE:
+                text.delete_text();
                 break;
             default:
                 printf("This command is not implemented\n");
