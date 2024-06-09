@@ -93,6 +93,7 @@ class Text
 {
 private:
     char** text;
+    char* clipboard; // буфер обміну
     int row_number;
     int buffer_size;
     int line_count;
@@ -113,7 +114,7 @@ private:
 
 public:
     explicit Text (int rows = 10, int buffer = 256)
-    : text(nullptr), row_number(rows), buffer_size(buffer), line_count(0), undo_redo_buffer(rows, buffer)
+    : text(nullptr), row_number(rows), buffer_size(buffer), line_count(0), undo_redo_buffer(rows, buffer), clipboard(nullptr)
     {
         text = (char**)malloc(row_number * sizeof(char*));
         if (text == nullptr){
@@ -128,6 +129,13 @@ public:
             }
             text[i][0] = '\0'; // ініціалізуємо кожен рядок як порожній
         }
+
+        clipboard = (char*)malloc(buffer_size * sizeof(char));
+        if (clipboard == nullptr) {
+            cerr << "Cannot allocate memory for clipboard" << endl;
+            exit(EXIT_FAILURE);
+        }
+        clipboard[0] = '\0';
     }
 
     ~Text() {
@@ -136,6 +144,7 @@ public:
             text[i] = nullptr;
         }
         free(text);
+        free(clipboard);
     }
 
     static void print_help() {
@@ -150,7 +159,10 @@ public:
                 << "6 - Insert the text by line and symbol index\n"
                 << "7 - Search for the text\n"
                 << "8 - Delete the text by line and index\n"
-                << "9 - Undo latest command\n";
+                << "9 - Undo latest command\n"
+                << "11 - Cut text\n"
+                << "12 - Paste text\n"
+                << "13 - Copy text\n";
     }
 
     void append_text_to_end(){
@@ -409,6 +421,99 @@ public:
         }
     }
 
+    void cut_text() {
+        save_state();
+        int line, index, num_of_symbols;
+        cout << "Choose line, index and number of symbols: ";
+        cin >> line >> index >> num_of_symbols;
+
+        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
+            cout << "You entered invalid line or index." << endl;
+            return;
+        }
+        if (index + num_of_symbols > strnlen(text[line], buffer_size)) {
+            cout << "The number of symbols you want to cut is bigger than the number of symbols in buffer" << endl;
+            return;
+        }
+
+        strncpy(clipboard, text[line] + index, num_of_symbols); // копіємо обраний текст в буфер обміну
+        clipboard[num_of_symbols] = '\0'; // зануляємо текст що додали в буфер
+
+        // те саме робимо що і в delete
+        size_t current_length = strnlen(text[line], buffer_size); // довжина тексту в буфері зараз
+
+        char* temporary_buffer = (char*)malloc((current_length) * sizeof(char));
+        if (temporary_buffer == nullptr){
+            cerr << "Memory allocation failed" << endl;
+            return;
+        }
+        strncpy(temporary_buffer, text[line], index); // текст який був до індексу, після якого видаляти
+        temporary_buffer[index] = '\0'; // нульове закінчення
+        strncat(temporary_buffer, text[line] + index + num_of_symbols, strnlen(text[line], buffer_size) - index - num_of_symbols);
+        // додаємо текст який залишився після видаленого
+
+        strncpy(text[line], temporary_buffer, buffer_size - 1);
+        text[line][buffer_size - 1] = '\0';
+
+        free(temporary_buffer);
+        cout << "Text has been deleted successfully." << endl;
+    }
+
+    void copy_text() {
+        int line, index, num_of_symbols;
+        cout << "Choose line, index and number of symbols: ";
+        cin >> line >> index >> num_of_symbols;
+
+        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
+            cout << "You entered invalid line or index." << endl;
+            return;
+        }
+
+        strncpy(clipboard, text[line] + index, num_of_symbols);
+        clipboard[num_of_symbols] = '\0';
+        cout << "Text has been copied to clipboard." << endl;
+    }
+
+    void paste_text() {
+        save_state();
+        int line, index;
+        cout << "Choose line and index: ";
+        cin >> line >> index;
+
+        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
+            cout << "You entered invalid line or index." << endl;
+            return;
+        }
+
+        size_t clipboard_length = strnlen(clipboard, buffer_size); // довжина тексту в буфері обміну
+        size_t current_length = strnlen(text[line], buffer_size); // довжина тексту в буфері
+        size_t new_length = current_length + clipboard_length + 1; // нова довжина + \0
+
+        if (new_length > buffer_size) { // виділяємо памʼять
+            text[line] = (char*)realloc(text[line], new_length * sizeof(char));
+            if (text[line] == nullptr) {
+                cerr << "Memory reallocation failed." << endl;
+                return;
+            }
+        }
+
+        char* temporary_buffer = (char*)malloc((current_length - index + 1) * sizeof(char));
+        // зберігання тексту що йде після вставки
+        if (temporary_buffer == nullptr) {
+            cerr << "Memory allocation failed" << endl;
+            return;
+        }
+
+        strncpy(temporary_buffer, text[line] + index, current_length - index); // текст що йде після вставленого
+        temporary_buffer[current_length - index] = '\0';
+        text[line][index] = '\0';
+        strncat(text[line], clipboard, clipboard_length); // додавання тексту з буфера обміну до рядка
+        strncat(text[line], temporary_buffer, current_length - index); // додавання тексту що йде після вставленого
+
+        free(temporary_buffer);
+        cout << "Text has been pasted from clipboard." << endl;
+    }
+
 };
 
 enum Commands {
@@ -422,6 +527,9 @@ enum Commands {
     COMMAND_SEARCH = 7,
     COMMAND_DELETE = 8,
     COMMAND_UNDO = 9,
+    COMMAND_CUT = 11,
+    COMMAND_COPY = 13,
+    COMMAND_PASTE = 12
 
 };
 
@@ -469,6 +577,15 @@ int main() {
                 break;
             case COMMAND_UNDO:
                 text.undo_command();
+                break;
+            case COMMAND_CUT:
+                text.cut_text();
+                break;
+            case COMMAND_COPY:
+                text.copy_text();
+                break;
+            case COMMAND_PASTE:
+                text.paste_text();
                 break;
             default:
                 printf("This command is not implemented\n");
