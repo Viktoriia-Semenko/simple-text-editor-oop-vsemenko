@@ -5,6 +5,90 @@
 
 using namespace std;
 
+class UndoRedoBuffer
+{
+private:
+    char*** three_states;
+    int row_number;
+    int buffer_size;
+    int index;
+    int count_states;
+    int undo_buffer_size = 3;
+
+public:
+    UndoRedoBuffer(int rows, int buffer)
+    : buffer_size(buffer), row_number(rows), index(0), count_states(0) // ініціалізація обʼєктів класу
+    {
+        three_states = (char***)malloc(undo_buffer_size * sizeof(char**));
+        if (three_states == nullptr){
+            cerr << "Memory allocation failed" << endl;
+            exit(EXIT_FAILURE);
+        }
+
+        // виділення памʼяті для трьох команд
+        for (int i = 0; i < undo_buffer_size; i++) {
+            three_states[i] = (char**)malloc(row_number * sizeof(char*));
+            if (three_states[i] == nullptr){
+                cerr << "Memory allocation failed" << endl;
+                exit(EXIT_FAILURE);
+            }
+            for (int j = 0; j < row_number; j++) {
+                three_states[i][j] = (char*)malloc(buffer_size * sizeof(char));
+                if (three_states[i][j] == nullptr){
+                    cerr << "Memory allocation failed" << endl;
+                    exit(EXIT_FAILURE);
+                }
+                three_states[i][j][0] = '\0';
+            }
+
+        }
+    }
+
+    ~UndoRedoBuffer() {
+        for (int i = 0; i < undo_buffer_size; i++) {
+            for (int j = 0; j < row_number; j++) {
+                free(three_states[i][j]);
+                three_states[i][j] = nullptr;
+            }
+            free(three_states[i]);
+            three_states[i] = nullptr;
+        }
+        free(three_states);
+        three_states = nullptr;
+    }
+
+    void save_state(char** text) { // зберігає поточний стан тексту
+        if (three_states == nullptr){
+            return;
+        }
+        for (int i = 0; i < row_number; ++i) { // проходження по всіх рядках тексту
+            strncpy(three_states[index][i], text[i], buffer_size - 1);
+            three_states[index][i][buffer_size - 1] = '\0';
+        }
+        index = (index + 1) % 3; // оновлення індексу, щоб вказати потім на наступний буфер (їх три)
+        if (count_states < 3) {
+            count_states++;
+        }
+    }
+
+    bool load_state(char** text) { // вивантаження стану
+        if (count_states == 0) { // якщо немає станів для відміни
+            cout << "No undo could be done." << endl;
+            return false;
+        }
+        index = (index + 2) % 3; // переміщення індексу назад до останнього збереженого стану
+        for (int i = 0; i < row_number; ++i) {
+            strncpy(text[i], three_states[index][i], buffer_size - 1);
+            text[i][buffer_size - 1] = '\0';
+        }
+        count_states--;
+
+        return true;
+    }
+
+};
+
+
 class Text
 {
 private:
@@ -12,6 +96,7 @@ private:
     int row_number;
     int buffer_size;
     int line_count;
+    UndoRedoBuffer undo_redo_buffer;
 
     static bool file_exists(const char *filename){
         FILE* file_pointer = fopen(filename, "r");
@@ -22,9 +107,13 @@ private:
         }
         return is_exists;
     }
+    void save_state() {
+        undo_redo_buffer.save_state(text);
+    }
+
 public:
     explicit Text (int rows = 10, int buffer = 256)
-    : text(nullptr), row_number(rows), buffer_size(buffer), line_count(0)
+    : text(nullptr), row_number(rows), buffer_size(buffer), line_count(0), undo_redo_buffer(rows, buffer)
     {
         text = (char**)malloc(row_number * sizeof(char*));
         if (text == nullptr){
@@ -49,7 +138,7 @@ public:
         free(text);
     }
 
-    void print_help() {
+    static void print_help() {
         cout << "This program is the 'Simple Text Editor'\n"
                 << "It implements the following commands:\n"
                 << "0 - See the commands\n"
@@ -60,10 +149,12 @@ public:
                 << "5 - Print the current text to console\n"
                 << "6 - Insert the text by line and symbol index\n"
                 << "7 - Search for the text\n"
-                << "8 - Delete the text by line and index\n";
+                << "8 - Delete the text by line and index\n"
+                << "9 - Undo latest command\n";
     }
 
     void append_text_to_end(){
+        save_state();
         char* buffer = nullptr; // цей вказівник ще не використовується
         size_t local_buffer_size = 0;
         ssize_t input_length; // довжина рядка що зчитали
@@ -103,7 +194,9 @@ public:
         }
         free(buffer);
     }
+
     void start_new_line(){
+        save_state();
         if (line_count >= row_number){
             row_number *= 2; // якщо недостатньо рядків, то виділяємо в два рази більше
             text = (char**)realloc(text, row_number * sizeof(char*));
@@ -162,7 +255,7 @@ public:
         cout << "Text has been saved successfully" << endl;
     }
 
-    void load_info() {
+    static void load_info() {
         char load_name[100];
         cout << "Enter the file name for loading: ";
         cin >> load_name;
@@ -181,7 +274,8 @@ public:
         cout << "Text has been loaded successfully" << endl;
     }
 
-    void print_text() const {
+    void print_text() const{
+
         if (text == nullptr) {
             cout << "Text is empty" << endl;
             return;
@@ -194,6 +288,7 @@ public:
     }
 
     void insert_text_by_line() {
+        save_state();
         int line, index;
         char* buffer = nullptr;
         size_t local_buffer_size = 0;
@@ -269,8 +364,8 @@ public:
         }
     }
 
-
     void delete_text(){
+        save_state();
         // input
         int line, index, num_of_symbols;
         cout << "Choose line, index and number of symbols: ";
@@ -303,7 +398,17 @@ public:
 
         free(temporary_buffer);
         cout << "Text has been deleted successfully." << endl;
+
     }
+
+    void undo_command() {
+        if (!undo_redo_buffer.load_state(text)) { // якщо буде false
+            cout << "Undo failed. No previous index is available." << endl;
+        } else {
+            cout << "Undo successful." << endl;
+        }
+    }
+
 };
 
 enum Commands {
@@ -315,7 +420,9 @@ enum Commands {
     COMMAND_PRINT = 5,
     COMMAND_INSERT_LI = 6,
     COMMAND_SEARCH = 7,
-    COMMAND_DELETE = 8
+    COMMAND_DELETE = 8,
+    COMMAND_UNDO = 9,
+
 };
 
 int main() {
@@ -359,6 +466,9 @@ int main() {
                 break;
             case COMMAND_DELETE:
                 text.delete_text();
+                break;
+            case COMMAND_UNDO:
+                text.undo_command();
                 break;
             default:
                 printf("This command is not implemented\n");
