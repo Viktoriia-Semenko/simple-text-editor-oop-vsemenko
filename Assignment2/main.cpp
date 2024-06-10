@@ -9,18 +9,23 @@ class UndoRedoBuffer
 {
 private:
     char*** three_states;
+    char*** redo_states;
     int row_number;
     int buffer_size;
     int index;
     int count_states;
+    int redo_index;
+    int count_redo_states;
     int undo_buffer_size = 3;
 
 public:
     UndoRedoBuffer(int rows, int buffer)
-    : buffer_size(buffer), row_number(rows), index(0), count_states(0) // ініціалізація обʼєктів класу
+    : buffer_size(buffer), row_number(rows), index(0), redo_index(0), count_states(0), count_redo_states(0)// ініціалізація обʼєктів класу
     {
         three_states = (char***)malloc(undo_buffer_size * sizeof(char**));
-        if (three_states == nullptr){
+        redo_states = (char***)malloc(undo_buffer_size * sizeof(char**));
+
+        if (three_states == nullptr || redo_states == nullptr){
             cerr << "Memory allocation failed" << endl;
             exit(EXIT_FAILURE);
         }
@@ -28,13 +33,16 @@ public:
         // виділення памʼяті для трьох команд
         for (int i = 0; i < undo_buffer_size; i++) {
             three_states[i] = (char**)malloc(row_number * sizeof(char*));
-            if (three_states[i] == nullptr){
+            redo_states[i] = (char**)malloc(row_number * sizeof(char*));
+
+            if (three_states[i] == nullptr || redo_states[i] == nullptr){
                 cerr << "Memory allocation failed" << endl;
                 exit(EXIT_FAILURE);
             }
             for (int j = 0; j < row_number; j++) {
                 three_states[i][j] = (char*)malloc(buffer_size * sizeof(char));
-                if (three_states[i][j] == nullptr){
+                redo_states[i][j] = (char*)malloc(buffer_size * sizeof(char));
+                if (three_states[i][j] == nullptr || redo_states[i][j] == nullptr){
                     cerr << "Memory allocation failed" << endl;
                     exit(EXIT_FAILURE);
                 }
@@ -48,26 +56,46 @@ public:
         for (int i = 0; i < undo_buffer_size; i++) {
             for (int j = 0; j < row_number; j++) {
                 free(three_states[i][j]);
+                free(redo_states[i][j]);
                 three_states[i][j] = nullptr;
+                redo_states[i][j] = nullptr;
             }
             free(three_states[i]);
+            free(redo_states[i]);
             three_states[i] = nullptr;
+            redo_states[i] = nullptr;
         }
         free(three_states);
+        free(redo_states);
         three_states = nullptr;
+        redo_states = nullptr;
     }
 
     void save_state(char** text) { // зберігає поточний стан тексту
         if (three_states == nullptr){
             return;
         }
-        for (int i = 0; i < row_number; ++i) { // проходження по всіх рядках тексту
+        for (int i = 0; i < row_number; i++) { // проходження по всіх рядках тексту
             strncpy(three_states[index][i], text[i], buffer_size - 1);
             three_states[index][i][buffer_size - 1] = '\0';
         }
         index = (index + 1) % 3; // оновлення індексу, щоб вказати потім на наступний буфер (їх три)
         if (count_states < 3) {
             count_states++;
+        }
+        count_redo_states++;
+    }
+    void save_redo_state(char** text) {
+        if (redo_states == nullptr) {
+            return;
+        }
+        for (int i = 0; i < row_number; ++i) {
+            strncpy(redo_states[redo_index][i], text[i], buffer_size - 1);
+            redo_states[redo_index][i][buffer_size - 1] = '\0';
+        }
+        redo_index = (redo_index + 1) % 3;
+        if (count_redo_states < 3) {
+            count_redo_states++;
         }
     }
 
@@ -77,12 +105,26 @@ public:
             return false;
         }
         index = (index + 2) % 3; // переміщення індексу назад до останнього збереженого стану
-        for (int i = 0; i < row_number; ++i) {
+        for (int i = 0; i < row_number; i++) {
             strncpy(text[i], three_states[index][i], buffer_size - 1);
             text[i][buffer_size - 1] = '\0';
         }
         count_states--;
+        count_redo_states--;
 
+        return true;
+    }
+    bool load_redo_state(char** text) {
+        if (count_redo_states == 0) {
+            cout << "No redo could be done." << endl;
+            return false;
+        }
+        redo_index = (redo_index + 2) % 3;
+        for (int i = 0; i < row_number; i++) {
+            strncpy(text[i], redo_states[redo_index][i], buffer_size - 1);
+            text[i][buffer_size - 1] = '\0';
+        }
+        count_redo_states--;
         return true;
     }
 
@@ -110,6 +152,9 @@ private:
     }
     void save_state() {
         undo_redo_buffer.save_state(text);
+    }
+    void save_redo_state() {
+        undo_redo_buffer.save_redo_state(text);
     }
 
 public:
@@ -161,9 +206,9 @@ public:
                 << "8 - Delete the text by line and index\n"
                 << "9 - Undo latest command\n"
                 << "11 - Cut text\n"
-                << "12 - Paste text\n"
-                << "13 - Copy text\n"
-                << "14 - Insert text with replacement"
+                << "12 - Copy text\n"
+                << "13 - Paste text\n"
+                << "14 - Insert text with replacement\n";
     }
 
     void append_text_to_end(){
@@ -206,6 +251,7 @@ public:
             strncat(text[line_count - 1], buffer, local_buffer_size); // додаємо введений текст до кінця останнього рядка
         }
         free(buffer);
+        save_redo_state();
     }
 
     void start_new_line(){
@@ -228,7 +274,8 @@ public:
         }
         text[line_count][0] = '\0';
         line_count++; // до підрахунку рядків додаємо рядок
-        cout << "New line is started.\n" << endl;
+        cout << "New line is started." << endl;
+        save_redo_state();
     }
 
     void save_info() {
@@ -354,6 +401,7 @@ public:
         free(buffer);
 
         cout << "Text has been inserted." << endl;
+        save_redo_state();
     }
 
     void search_text() const {
@@ -411,6 +459,7 @@ public:
 
         free(temporary_buffer);
         cout << "Text has been deleted successfully." << endl;
+        save_redo_state();
 
     }
 
@@ -421,6 +470,15 @@ public:
             cout << "Undo successful." << endl;
         }
     }
+
+    void redo_command() {
+        if (!undo_redo_buffer.load_redo_state(text)) {
+            cout << "Redo failed. No next index is available." << endl;
+        } else {
+            cout << "Redo successful." << endl;
+        }
+    }
+
 
     void cut_text() {
         save_state();
@@ -458,6 +516,7 @@ public:
 
         free(temporary_buffer);
         cout << "Text has been deleted successfully." << endl;
+        save_redo_state();
     }
 
     void copy_text() {
@@ -473,6 +532,7 @@ public:
         strncpy(clipboard, text[line] + index, num_of_symbols);
         clipboard[num_of_symbols] = '\0';
         cout << "Text has been copied to clipboard." << endl;
+        save_redo_state();
     }
 
     void paste_text() {
@@ -513,6 +573,7 @@ public:
 
         free(temporary_buffer);
         cout << "Text has been pasted from clipboard." << endl;
+        save_redo_state();
     }
 
     void insert_with_replacement() {
@@ -565,6 +626,7 @@ public:
         free(buffer);
 
         cout << "Text has been inserted with replacement." << endl;
+        save_redo_state();
     }
 };
 
@@ -579,6 +641,7 @@ enum Commands {
     COMMAND_SEARCH = 7,
     COMMAND_DELETE = 8,
     COMMAND_UNDO = 9,
+    COMMAND_REDO = 10,
     COMMAND_CUT = 11,
     COMMAND_COPY = 12,
     COMMAND_PASTE = 13,
@@ -631,6 +694,9 @@ int main() {
             case COMMAND_UNDO:
                 text.undo_command();
                 break;
+            case COMMAND_REDO:
+                text.redo_command();
+                break;
             case COMMAND_CUT:
                 text.cut_text();
                 break;
@@ -646,7 +712,7 @@ int main() {
             default:
                 printf("This command is not implemented\n");
         }
-        cout << "Do you want to continue?:(y/n) ";
+        cout << "\nDo you want to continue?:(y/n) ";
         cin >> continue_input;
         if (strcmp(continue_input, "y") == 0) {
             continue;
