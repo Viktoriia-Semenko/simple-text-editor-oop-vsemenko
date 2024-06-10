@@ -162,7 +162,8 @@ public:
                 << "9 - Undo latest command\n"
                 << "11 - Cut text\n"
                 << "12 - Paste text\n"
-                << "13 - Copy text\n";
+                << "13 - Copy text\n"
+                << "14 - Insert text with replacement"
     }
 
     void append_text_to_end(){
@@ -171,7 +172,7 @@ public:
         size_t local_buffer_size = 0;
         ssize_t input_length; // довжина рядка що зчитали
 
-        cout << "Enter a text to append: " << endl;
+        cout << "Enter a text to append: ";
         cin.ignore();
         // динамічно виділяємо памʼять та зберігаємо текст в буфері
         input_length = getline(&buffer, &local_buffer_size, stdin);
@@ -514,6 +515,57 @@ public:
         cout << "Text has been pasted from clipboard." << endl;
     }
 
+    void insert_with_replacement() {
+        save_state();
+        char* buffer = nullptr; // зберігання інпут тексту
+        int line, index;
+        size_t local_buffer_size = 0;
+        cout << "Choose line and index: ";
+        cin >> line >> index;
+        cin.ignore();
+
+        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
+            cout << "You entered an invalid line or index." << endl;
+            return;
+        }
+
+        cout << "Write text: ";
+        ssize_t input_length = getline(&buffer, &local_buffer_size, stdin);
+
+        if (input_length == -1) {
+            cerr << "Error while reading input.\n" << endl;
+            free(buffer);
+            return;
+        }
+
+        buffer[input_length - 1] = '\0';
+
+        size_t new_length = index + strnlen(buffer, local_buffer_size); // довжина вставленого тексту після вставки
+        size_t current_length = strnlen(text[line], buffer_size); // початкова довжина тексту, який в буфері без змін
+
+        if (new_length >= buffer_size) {
+            text[line] = (char*)realloc(text[line], (new_length + 1) * sizeof(char));
+            if (text[line] == nullptr) {
+                cerr << "Memory reallocation failed." << endl;
+                free(buffer);
+                return;
+            }
+            buffer_size = new_length + 1;
+        }
+
+        size_t replace_length = current_length - index; // обчислення довжини тексту, який треба замінити
+        if (replace_length > strnlen(buffer, local_buffer_size)) // чи довжина заміни більша за довжину нового тексту
+            replace_length = strnlen(buffer, local_buffer_size); // тоді довжина заміна - довжина тексту інпут
+
+        strncpy(text[line] + index, buffer, replace_length); // копіювання в рядок починаючи з індекса вставки
+        if (replace_length < strnlen(buffer, local_buffer_size))
+            strncat(text[line], buffer + replace_length, strnlen(buffer + replace_length, local_buffer_size));
+        // додавання тексту що залишився після вставки нового
+
+        free(buffer);
+
+        cout << "Text has been inserted with replacement." << endl;
+    }
 };
 
 enum Commands {
@@ -528,8 +580,9 @@ enum Commands {
     COMMAND_DELETE = 8,
     COMMAND_UNDO = 9,
     COMMAND_CUT = 11,
-    COMMAND_COPY = 13,
-    COMMAND_PASTE = 12
+    COMMAND_COPY = 12,
+    COMMAND_PASTE = 13,
+    COMMAND_INSERT_REPLACE = 14
 
 };
 
@@ -586,6 +639,9 @@ int main() {
                 break;
             case COMMAND_PASTE:
                 text.paste_text();
+                break;
+            case COMMAND_INSERT_REPLACE:
+                text.insert_with_replacement();
                 break;
             default:
                 printf("This command is not implemented\n");
