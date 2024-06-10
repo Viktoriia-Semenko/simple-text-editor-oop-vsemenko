@@ -18,11 +18,24 @@ based on the current cursor location.
 
 ## Control questions
 1. What is object-oriented paradigm?
+   - це парадигма, у якій програма написана як набір класів. Кожен клас має екземпляри, які називаються об’єктами
+    <br></br>
 2. What is a class?
+   - це шаблон або схема для створення об'єктів. Він визначає дані та методи, які будуть спільними для всіх об'єктів цього класу.
+   - Формально клас розглядається як набір даних, таких як поля, атрибути, члени класу та функції, тобто методи для роботи з ними.
+<br></br>
 3. What is an object?
+   - це конкретний екземпляр класу, який має певні значення полів та може виконувати методи класу.
+<br></br>
 4. What is the difference between fields and methods?
+   - Поля (або властивості) - це змінні, що зберігають дані про стан об'єкта.
+   - Методи - це функції, що визначають поведінку об'єкта, тобто те, що об'єкт може робити.
+<br></br>    
 5. Enumerate key object-oriented principles.
-6. Explain benefits of using object-oriented paradigm comparing to procedural and structural.
-7. Describe the program translation process from the source code to the final executable.
-8. What is compiler responsible for?
-9. What is a linker?
+9. Explain benefits of using object-oriented paradigm comparing to procedural and structural.
+10. Describe the program translation process from the source code to the final executable.
+11. What is compiler responsible for?
+12. What is a linker?
+
+## Test cases
+[Test cases for Assignment 2](https://github.com/Viktoriia-Semenko/simple-text-editor-oop-vsemenko/blob/main/test_cases.md)
