@@ -42,3 +42,9 @@ I amam  doing Assignment 2
 11. Undo latest command:
     > HitAAAA a beautiful day to go for a walk, eat cake amd relax, however, I am doing paradigms at the backyard </br>
 I am doing Assignment 2
+<img width="1126" alt="Знімок екрана 2024-06-11 о 16 52 56" src="https://github.com/Viktoriia-Semenko/simple-text-editor-oop-vsemenko/assets/150340301/2dbcd6cd-2208-4c92-bfdb-34a4d1226432">
+<img width="896" alt="Знімок екрана 2024-06-11 о 16 53 09" src="https://github.com/Viktoriia-Semenko/simple-text-editor-oop-vsemenko/assets/150340301/add74779-066f-4fde-8ea1-91ec80cd83fd">
+<img width="892" alt="Знімок екрана 2024-06-11 о 16 53 33" src="https://github.com/Viktoriia-Semenko/simple-text-editor-oop-vsemenko/assets/150340301/d26982a6-c826-4637-be0e-a55413e93c66">
+
+
+   
