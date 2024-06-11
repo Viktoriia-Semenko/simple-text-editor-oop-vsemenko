@@ -205,6 +205,7 @@ public:
                 << "7 - Search for the text\n"
                 << "8 - Delete the text by line and index\n"
                 << "9 - Undo latest command\n"
+                << "10 - Redo latest command\n"
                 << "11 - Cut text\n"
                 << "12 - Copy text\n"
                 << "13 - Paste text\n"
@@ -213,6 +214,7 @@ public:
 
     void append_text_to_end(){
         save_state();
+        save_redo_state();
         char* buffer = nullptr; // цей вказівник ще не використовується
         size_t local_buffer_size = 0;
         ssize_t input_length; // довжина рядка що зчитали
@@ -256,6 +258,7 @@ public:
 
     void start_new_line(){
         save_state();
+        save_redo_state();
         if (line_count >= row_number){
             row_number *= 2; // якщо недостатньо рядків, то виділяємо в два рази більше
             text = (char**)realloc(text, row_number * sizeof(char*));
@@ -349,6 +352,7 @@ public:
 
     void insert_text_by_line() {
         save_state();
+        save_redo_state();
         int line, index;
         char* buffer = nullptr;
         size_t local_buffer_size = 0;
@@ -427,6 +431,7 @@ public:
 
     void delete_text(){
         save_state();
+        save_redo_state();
         // input
         int line, index, num_of_symbols;
         cout << "Choose line, index and number of symbols: ";
@@ -482,6 +487,7 @@ public:
 
     void cut_text() {
         save_state();
+        save_redo_state();
         int line, index, num_of_symbols;
         cout << "Choose line, index and number of symbols: ";
         cin >> line >> index >> num_of_symbols;
@@ -532,11 +538,11 @@ public:
         strncpy(clipboard, text[line] + index, num_of_symbols);
         clipboard[num_of_symbols] = '\0';
         cout << "Text has been copied to clipboard." << endl;
-        save_redo_state();
     }
 
     void paste_text() {
         save_state();
+        save_redo_state();
         int line, index;
         cout << "Choose line and index: ";
         cin >> line >> index;
@@ -578,6 +584,7 @@ public:
 
     void insert_with_replacement() {
         save_state();
+        save_redo_state();
         char* buffer = nullptr; // зберігання інпут тексту
         int line, index;
         size_t local_buffer_size = 0;
