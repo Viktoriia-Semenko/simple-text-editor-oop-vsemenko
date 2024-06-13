@@ -130,6 +130,32 @@ public:
 
 };
 
+class ConsoleInput
+{
+public:
+    void append_text(){
+        cout << "Enter a text to append: ";
+        cin.ignore();
+    }
+    void line_index(int& line, int& index){
+        cout << "Choose line and index: ";
+        cin >> line >> index;
+        cin.ignore();
+    }
+    void file_name(char* save_name){
+        cout << "Enter the file name: ";
+        cin >> save_name;
+    }
+    void search_text(){
+        cout << "Enter text to search: ";
+        cin.ignore();
+    }
+    void line_index_num(int& line, int& index, int& num_of_symbols){
+        cout << "Choose line, index and number of symbols: ";
+        cin >> line >> index >> num_of_symbols;
+    }
+
+};
 
 class Text
 {
@@ -140,6 +166,7 @@ private:
     int buffer_size;
     int line_count;
     UndoRedoBuffer undo_redo_buffer;
+    ConsoleInput console_input;
 
     static bool file_exists(const char *filename){
         FILE* file_pointer = fopen(filename, "r");
@@ -219,8 +246,8 @@ public:
         size_t local_buffer_size = 0;
         ssize_t input_length; // довжина рядка що зчитали
 
-        cout << "Enter a text to append: ";
-        cin.ignore();
+        console_input.append_text();
+
         // динамічно виділяємо памʼять та зберігаємо текст в буфері
         input_length = getline(&buffer, &local_buffer_size, stdin);
 
@@ -283,8 +310,7 @@ public:
 
     void save_info() {
         char save_name[100];
-        cout << "Enter the file name for saving: ";
-        cin >> save_name;
+        console_input.file_name(save_name);
 
         FILE* file;
         if (file_exists(save_name)) {
@@ -318,10 +344,10 @@ public:
         cout << "Text has been saved successfully" << endl;
     }
 
-    static void load_info() {
+    void load_info() {
         char load_name[100];
-        cout << "Enter the file name for loading: ";
-        cin >> load_name;
+
+        console_input.file_name(load_name);
 
         FILE* file = fopen(load_name, "r");
         if (file == nullptr) {
@@ -358,8 +384,8 @@ public:
         size_t local_buffer_size = 0;
         ssize_t input_length;
 
-        cout << "Choose line and index: ";
-        cin >> line >> index;
+        console_input.line_index(line, index);
+
         if (line >= line_count || index > strnlen(text[line], buffer_size)) {
             cout << "You entered invalid line or index." << endl;
             return;
@@ -408,10 +434,10 @@ public:
         save_redo_state();
     }
 
-    void search_text() const {
+    void search_text() {
         char buffer[256];
-        cout << "Enter text to search: ";
-        cin.ignore();
+        console_input.search_text();
+
         fgets(buffer, buffer_size, stdin);
         buffer[strcspn(buffer, "\n")] = 0;
 
@@ -429,13 +455,13 @@ public:
         }
     }
 
-    void delete_text(){
+    void delete_text(int line = -1, int index = -1, int num_of_symbols = -1, bool ask_for_input = true){
         save_state();
         save_redo_state();
         // input
-        int line, index, num_of_symbols;
-        cout << "Choose line, index and number of symbols: ";
-        cin >> line >> index >> num_of_symbols;
+        if (ask_for_input) {
+            console_input.line_index_num(line, index, num_of_symbols);
+        }
 
         // validation for the input
         if (line >= line_count || index > strnlen(text[line], buffer_size)) {
@@ -484,13 +510,14 @@ public:
         }
     }
 
-
-    void cut_text() {
+    void copy_text(int line = -1, int index = -1, int num_of_symbols = -1, bool ask_for_input = true) {
         save_state();
         save_redo_state();
-        int line, index, num_of_symbols;
-        cout << "Choose line, index and number of symbols: ";
-        cin >> line >> index >> num_of_symbols;
+
+        if (ask_for_input) {
+            console_input.line_index_num(line, index, num_of_symbols);
+        }
+
 
         if (line >= line_count || index > strnlen(text[line], buffer_size)) {
             cout << "You entered invalid line or index." << endl;
@@ -503,49 +530,22 @@ public:
 
         strncpy(clipboard, text[line] + index, num_of_symbols); // копіємо обраний текст в буфер обміну
         clipboard[num_of_symbols] = '\0'; // зануляємо текст що додали в буфер
-
-        // те саме робимо що і в delete
-        size_t current_length = strnlen(text[line], buffer_size); // довжина тексту в буфері зараз
-
-        char* temporary_buffer = (char*)malloc((current_length) * sizeof(char));
-        if (temporary_buffer == nullptr){
-            cerr << "Memory allocation failed" << endl;
-            return;
-        }
-        strncpy(temporary_buffer, text[line], index); // текст який був до індексу, після якого видаляти
-        temporary_buffer[index] = '\0'; // нульове закінчення
-        strncat(temporary_buffer, text[line] + index + num_of_symbols, strnlen(text[line], buffer_size) - index - num_of_symbols);
-        // додаємо текст який залишився після видаленого
-
-        strncpy(text[line], temporary_buffer, buffer_size - 1);
-        text[line][buffer_size - 1] = '\0';
-
-        free(temporary_buffer);
-        cout << "Text has been deleted successfully." << endl;
+        cout << "Text has been copied to clipboard." << endl;
         save_redo_state();
     }
 
-    void copy_text() {
+    void cut_text() {
         int line, index, num_of_symbols;
-        cout << "Choose line, index and number of symbols: ";
-        cin >> line >> index >> num_of_symbols;
-
-        if (line >= line_count || index > strnlen(text[line], buffer_size)) {
-            cout << "You entered invalid line or index." << endl;
-            return;
-        }
-
-        strncpy(clipboard, text[line] + index, num_of_symbols);
-        clipboard[num_of_symbols] = '\0';
-        cout << "Text has been copied to clipboard." << endl;
+        console_input.line_index_num(line, index, num_of_symbols);
+        copy_text(line, index, num_of_symbols, false);
+        delete_text(line, index, num_of_symbols, false);
     }
 
     void paste_text() {
         save_state();
         save_redo_state();
         int line, index;
-        cout << "Choose line and index: ";
-        cin >> line >> index;
+        console_input.line_index(line, index);
 
         if (line >= line_count || index > strnlen(text[line], buffer_size)) {
             cout << "You entered invalid line or index." << endl;
@@ -586,11 +586,10 @@ public:
         save_state();
         save_redo_state();
         char* buffer = nullptr; // зберігання інпут тексту
-        int line, index;
         size_t local_buffer_size = 0;
-        cout << "Choose line and index: ";
-        cin >> line >> index;
-        cin.ignore();
+
+        int line, index;
+        console_input.line_index(line, index);
 
         if (line >= line_count || index > strnlen(text[line], buffer_size)) {
             cout << "You entered an invalid line or index." << endl;
