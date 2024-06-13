@@ -16,7 +16,7 @@ private:
     int count_states;
     int redo_index;
     int count_redo_states;
-    int undo_buffer_size = 3;
+    const int undo_buffer_size = 3;
 
 public:
     UndoRedoBuffer(int rows, int buffer)
@@ -72,31 +72,22 @@ public:
     }
 
     void save_state(char** text) { // зберігає поточний стан тексту
-        if (three_states == nullptr){
-            return;
-        }
         for (int i = 0; i < row_number; i++) { // проходження по всіх рядках тексту
             strncpy(three_states[index][i], text[i], buffer_size - 1);
             three_states[index][i][buffer_size - 1] = '\0';
         }
-        index = (index + 1) % 3; // оновлення індексу, щоб вказати потім на наступний буфер (їх три)
-        if (count_states < 3) {
+        index = (index + 1) % undo_buffer_size; // оновлення індексу, щоб вказати потім на наступний буфер (їх три)
+        if (count_states < undo_buffer_size) {
             count_states++;
+            count_redo_states++;
         }
-        count_redo_states++;
     }
     void save_redo_state(char** text) {
-        if (redo_states == nullptr) {
-            return;
-        }
-        for (int i = 0; i < row_number; ++i) {
+        for (int i = 0; i < row_number; i++) {
             strncpy(redo_states[redo_index][i], text[i], buffer_size - 1);
             redo_states[redo_index][i][buffer_size - 1] = '\0';
         }
-        redo_index = (redo_index + 1) % 3;
-        if (count_redo_states < 3) {
-            count_redo_states++;
-        }
+        redo_index = (redo_index + 1) % undo_buffer_size;
     }
 
     bool load_state(char** text) { // вивантаження стану
@@ -110,8 +101,6 @@ public:
             text[i][buffer_size - 1] = '\0';
         }
         count_states--;
-        count_redo_states--;
-
         return true;
     }
     bool load_redo_state(char** text) {
